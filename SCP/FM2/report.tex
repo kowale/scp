@@ -1,0 +1,464 @@
+\documentclass[a4paper, 12pt]{article}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{enumitem}
+\usepackage[breaklinks,colorlinks,linkcolor=blue,citecolor=blue,unicode]{hyperref}
+\usepackage[yyyymmdd]{datetime}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage{biblatex}
+\addbibresource{references.bib}
+
+\usepackage[T1]{fontenc}
+\usepackage{fontspec}
+\setmainfont{texgyrepagella}[
+  Extension = .otf,
+  UprightFont = *-regular,
+  BoldFont = *-bold,
+  ItalicFont = *-italic,
+  BoldItalicFont = *-bolditalic,
+]
+
+\usepackage{newunicodechar}
+\newunicodechar{ℕ}{\mathbb{N}}
+\newunicodechar{ℝ}{\mathbb{R}}
+\newunicodechar{→}{\right}
+\newunicodechar{←}{\left}
+\newunicodechar{∀}{\forall}
+\newunicodechar{≥}{\ge}
+\newunicodechar{≤}{\le}
+\newunicodechar{⟩}{\rangle}
+\newunicodechar{∑}{\sum}
+\newunicodechar{≠}{\ne}
+\newunicodechar{⌈}{\lceil}
+\newunicodechar{⌉}{\rceil}
+\newunicodechar{α}{\alpha}
+\newunicodechar{Ω}{\Omega}
+\newunicodechar{σ}{\displaystyle\sum}
+\newunicodechar{λ}{\lambda}
+\newunicodechar{↦}{\mapsto}
+\newunicodechar{ℙ}{$\mathbb{P}$}
+\newunicodechar{∈}{\in}
+\newunicodechar{ᵢ}{_i}
+\newunicodechar{ˣ}{$^x$}
+\newunicodechar{•}{\cdot}
+\newunicodechar{≈}{\approx}
+\newunicodechar{≈}{\approx}
+\newunicodechar{≃}{\simeq}
+\newunicodechar{ₗ}{$_l$}
+
+\usepackage{listings}
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage{tikz}
+
+\raggedbottom
+\setlist{nolistsep}
+\pagenumbering{gobble}
+\setlength\parindent{0pt}
+
+\newtheorem{definition}{Definition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+\newtheorem{prop}{Proposition}
+\newtheorem{example}{Example}
+
+\renewcommand{\familydefault}{\sfdefault}
+\renewcommand{\dateseparator}{--}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\renewcommand{\P}{\mathbb{P}}
+\newcommand{\set}[2]{\ensuremath{\{#1 \mid #2\}}}
+\renewcommand{\l}[1]{\fbox{\textbf{#1}}}
+\renewcommand{\b}[2]{\textbf{#1} (#2).}
+
+\lstset{
+  % frame=single,
+  % framexleftmargin=5mm,
+  % backgroundcolor=\color{gray},
+  % framexleftmargin=16pt,
+  % framextopmargin=6pt,
+  % framexbottommargin=6pt,
+  framextopmargin=5pt,
+  frame=tb,
+  framerule=0pt,
+}
+
+\usepackage{color}
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}   % red
+\definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}   % grey
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}      % green
+\definecolor{attributecolor}{rgb}{0.7, 0.1, 0.1} % red
+
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{language=lean}
+\begin{document}
+
+\title{Formalising Mathematics Project 2}
+\author{6020618}
+\date{2025-02-28}
+\maketitle
+
+\section*{Introduction}
+
+For the second project,
+I tried to formalise idealised triangulation from two pinhole cameras
+by showing that while a mapping from a single camera is not injective
+(since lines map to points i.e. depth is ambiguous),
+mapping from two different cameras is injective
+(since non-identical lines intersect in a unique world point).
+I followed a standard computer vision reference \cite{hartley_multiple_2004}.
+\\
+\\
+In particular, I tried to define an equivalence between
+elements of projective spaces as defined in Mathlib
+and concrete vectors in homogeneous coordinates,
+and a projection from 3-dimensional world points
+to a 2-dimensional pinhole camera image.
+
+\section*{Homogeneous coordinates}
+
+The proofs in \cite{hartley_multiple_2004} use homogeneous coordinates
+and rely on symbolic manipulations of matrices of specific shapes (3x4, 4x1, 3x1).
+
+\subsection*{Matrix API}
+
+I defined my own simple API for matrices and vectors,
+as I wanted something close to how those objects would look like in languages like Python.
+In hindsight, I should have used default notation for vectors in Mathlib,
+as I had to use it anyway to convert to ``Fin 3''.
+
+\begin{lstlisting}
+/-- Point on homogeneous image plane -/
+structure P3 where
+  (x y z : ℝ)
+
+/-- Point in homogeneous world coordinates -/
+structure P4 where
+  (x y z w : ℝ)
+
+/-- Camera projection matrix (row-major) -/
+structure P34 where
+  (p11 p12 p13 p14
+   p21 p22 p23 p24
+   p31 p32 p33 p34 : ℝ)
+\end{lstlisting}
+
+Matrix-vector multiplication for $3\times 4$ case
+is all that is needed for pinhole projection,
+and it doesn't take much to define.
+
+\begin{lstlisting}
+/-- Matrix-vector multiplication -/
+def matmulvec34 (m : P34) (v : P4) : P3 :=
+  P3.mk
+    (m.p11 * v.x + m.p12 * v.y + m.p13 * v.z + m.p14 * v.w)
+    (m.p21 * v.x + m.p22 * v.y + m.p23 * v.z + m.p24 * v.w)
+    (m.p31 * v.x + m.p32 * v.y + m.p33 * v.z + m.p34 * v.w)
+
+/-- 3x4 identity -/
+def P34.id := mk
+  1 0 0 0
+  0 1 0 0
+  0 0 1 0
+
+example : (matmulvec34 P34.id (P4.mk 4 5 0 1)).x = 4 := by
+  simp only [matmulvec34, P34.id]
+  norm_num
+\end{lstlisting}
+
+Vectors in Mathlib are expected to be functions from fintype indices,
+so I also prove equivalence with my custom matrix API.
+
+\begin{lstlisting}
+-- def doesn't work with ℙ, but abbrev does
+abbrev F4 := Fin 4 → ℝ
+abbrev F3 := Fin 3 → ℝ
+
+-- vectors-finite equivalence
+def vecFinEquiv : (P4 ≃ F4) where
+  toFun p := ![p.x, p.y, p.z, p.w]
+  invFun f := P4.mk (f 0) (f 1) (f 2) (f 3)
+  left_inv p := by simp
+  right_inv p := by
+    exact List.ofFn_inj.mp rfl
+\end{lstlisting}
+
+\subsection*{Homogeneous vectors}
+
+Finally, I tried to define the actual homogeneous coordinates
+as regular vectors with a hypothesis,
+but I struggled to use ``='' to express the equivalence relation.
+
+\begin{lstlisting}
+-- Homogeneous coordinates on R4
+structure H4 where
+  (v : F4)
+  (hv : ∀ a : ℝ, a ≠ 0 → a • v = v) -- `=` makes this nonsense
+
+-- hom-fin equivalence
+noncomputable
+def homFinEquiv : (H4 ≃ F4) where
+  toFun h := h.v
+  invFun v := H4.mk v (by sorry) -- also nonsense
+  left_inv v := by simp
+  right_inv h := by simp
+\end{lstlisting}
+
+A better way to define such equivalence relation is with a quotient,
+which is how Mathlib defines it as well,
+specifically ``LinearAlgebra.Projectivization''
+suggested to me by Dr Bhavik Mehta.
+
+\section*{Projectivisation}
+
+Let $V$ be a vector space of dimension $n$ over field $K$.
+Projectivisation $\P$ of $V$ is defined as
+the quotient of non-zero vectors under scalar multiplication
+($v\sim \alpha\cdot v \:\: \forall \alpha\in K \ne 0\:\: \forall v \in V v \ne 0$).
+
+\subsection*{Quotient of setoid}
+
+A slightly cleaner API internally defined in
+``AlgebraicGeometry.EllipticCurve.Projective''
+shows how to use the setoid relation $\approx$,
+which is what I was missing in my first attempt
+at defining homogeneous coordinates from the previous section.
+``$\R^x$'' is notation for ``Units $\R$'' (i.e. scalars)
+and dot notation applies Quotient on ``MulAction.orbitRel'',
+which is the multiplicative action to quotient by.
+
+\begin{lstlisting}
+instance setoidF4 : Setoid F4 := MulAction.orbitRel ℝˣ F4
+
+-- `≈` notation requires setoid instance on F4
+variable (v : F4) (hv : ∀ a : ℝ, v ≈ a • v)
+
+-- quotient can be made like this, but ≈ works without it
+def classF4 := MulAction.orbitRel.Quotient ℝˣ F4
+\end{lstlisting}
+
+\subsection*{Lift scale-invariant mapping}
+
+A scale-invariant mapping $f$ from non-zero vectors in $V$,
+that is, for all $x,y\in V \:\: k \in K$ if $x=k\cdot y$ then $f(x)=f(y)$,
+``lifts'' to a mapping on the projectivisation $\P$ of $V$.
+This construction is defined in ``LinearAlgebra.Projectivization.lift''.
+
+\begin{lstlisting}
+open Function LinearAlgebra Projectivization
+
+-- lift linear map from vector spaces to projective spaces
+def lift (f : F4 →ₗ[ℝ] F3) : ℙ ℝ F4 → ℙ ℝ F3 := by
+  intro p
+  refine Projectivization.lift (fun u : {v : F4 // v ≠ 0} => sorry) ?_ p
+  simp
+\end{lstlisting}
+
+\subsection*{Equivalence between non-zero vectors and projectivisation}
+
+In this subsection, I tried to prove equivalence between
+non-zero vectors in ``F4'' and elements of projectivization.
+
+\begin{lstlisting}
+noncomputable
+def projFinEquiv : ( ℙ ℝ F4 ≃ {f : F4 // f ≠ 0} ) where
+  toFun p := by
+    use p.rep
+    exact rep_nonzero p -- from `exact?`
+  invFun v := by
+    apply Projectivization.mk -- not sure what is `?v` here
+    · exact ne_zero_of_eq_one rfl -- from `exact?`
+  left_inv p := by sorry
+  right_inv p := by sorry
+\end{lstlisting}
+
+\section*{Pinhole camera}
+
+\begin{definition}[Camera]
+  Camera $P$ is a surjective linear mapping
+  from $\P_3$ (called ``world'') to $\P_2$ (called ``image plane'')
+  given by a full-rank real-valued $3\times 4$ matrix.
+  % Kernel of $C$ is called the camera center.
+\end{definition}
+
+To actually render projected points,
+equivalence classes of the projectivization need normalised representatives.
+One common convention is to require last coordinate to be $1$.
+This corresponds to placing the image plane at unit depth,
+which is also why camera reference frame often looks down the $z$ axis.
+A special case of $z=0$ corresponds to the line at infinity,
+typically filtered out or passed through as error value.
+
+\begin{lstlisting}
+/-- Normalise 2D point in homogeneous coordinates (id at ∞) -/
+noncomputable
+def P3.normalise (v : P3) : P3 :=
+  if v.z = 0 then v
+  else P3.mk (v.x/v.z) (v.y/v.z) 1
+
+/-- Normalise 3D point in homogeneous coordinates (id at ∞) -/
+noncomputable
+def P4.normalise (v : P4) : P4 :=
+  if v.w = 0 then v
+  else P4.mk (v.x/v.w) (v.y/v.w) (v.z/v.w) 1
+\end{lstlisting}
+
+To project, multiply world point by the projection matrix,
+and normalise the resulting homogeneous vector.
+
+\begin{lstlisting}
+open Function
+
+/-- Project world point to a pinhole camera -/
+noncomputable
+def project (camera : P34) (world : P4) : P3 :=
+  let image := matmulvec34 camera world;
+  P3.normalise image
+\end{lstlisting}
+
+Single camera is not injective,
+as depth is ambiguous,
+and a projected point
+can be anywhere on the corresponding line.
+
+\begin{lstlisting}
+-- project cannot be injective because depth is ambiguous
+-- so many points in 3D (on a line) map to the same point in 2D
+lemma project_once_not_injective : ¬Injective project := by
+  refine not_injective_iff.mpr ?_
+  constructor
+  · sorry
+  · exact P34.id
+\end{lstlisting}
+
+Intersection of backrays should make a pair of cameras injective,
+as long as they are different.
+Given a world point $x\in \P_3$
+A line from each camera is induced by two points:
+the camera center and pseudo-inverse projection of $x$.
+This should be possible to define like I did matix multiplication,
+but perhaps the Matrix API from Mathlib would work better for this.
+
+\begin{lstlisting}
+-- intersection of back-projected lines makes a pair injective
+lemma project_twice_injective (c1 : P34) (c2 : P34) (h : c1 ≠ c2) : Injective project := by
+  sorry
+\end{lstlisting}
+
+\subsection*{Structure of $P$}
+
+While any $3\times 4$ full-rank matrix is a valid projection,
+physical cameras in applications have more structure:
+$P$ can be factorised into $K[R|t]$
+where $K$ is an upper-triangular $3\times 3$ matrix,
+$R\in SO(3)\subset \R^{3\times 3}$ and $t\in \R^3$.
+That is,
+
+$$
+P=
+\begin{pmatrix}
+  fx & 0 & cx \\
+  0 & fy & cy \\
+  0 & 0 & 1 \\
+\end{pmatrix}
+\begin{pmatrix}
+  r11 & r12 & r13 & t1 \\
+  r21 & r22 & r23 & t2 \\
+  r31 & r32 & r33 & t3 \\
+  0 & 0 & 0 & 1 \\
+\end{pmatrix}
+$$
+
+I haven't used these factorisations in my formalisation,
+but it would be useful to construct concrete projection matrices
+that have full-rank, disjoint centers and correspond to computable projections
+that can be tested to test implementation.
+
+\section*{Future work}
+
+There are many issues with the idealised pinhole camera model I described.
+For example, since every world point can be projected to any such camera,
+there is no concept of "in front" or "behind" the field of view,
+which means that these cameras see everything in every direction.
+In practice, points are excluded prior to projection
+by constructing a viewing frustum and masking points outside of it.
+\\ \\
+For another example, pinhole cameras would need a very long exposure time,
+so physical cameras typically use a system of lenses to receive more light.
+This typically results in optical distortion of the final observed image.
+These distortions are typically modelled separately from perspective projection.
+\\ \\
+Lastly, rays back-projected from physical cameras
+never actually intersect due to many sources of noise along the way.
+This makes the proposed triangulation procedure impractical,
+Many such reconstructions are expressed as optimisation problems in \cite{hartley_multiple_2004}.
+
+\subsection*{Applied algebraic geometry}
+
+While doing background reading for this project,
+I came across \cite{kileel_snapshot_2023,agarwal_atlas_2024,ponce_congruences_2017}
+and various other papers they cite,
+where most of multiview geometry from \cite{hartley_multiple_2004}
+seems to be defined in terms of
+applied algebraic geometry roots of homogeneous polynomials.
+\\ \\
+If chirality (direction of the camera),
+lens distortion and various reconstruction problems
+can be defined on a single mathematical object
+(``joint image'' or ``multiview variety''),
+that would be very nice to work with,
+as these problems are solved in graphics in very ad-hoc ways prone to bugs,
+like clipping negative $w$-coordinate or pixel-to-pixel transforms.
+\\ \\
+Unfortunately, statement from those papers do not appear to be very formal,
+so it may be very hard to formalise for a beginner,
+according to comments from Professor Kevin Buzzard on Xena Discord.
+
+% \cite{yang_object_2023}
+% Much of this can be generalised
+% using algebraic geometry
+% such as Grassmannian $Gr(\mathbb{P}^{c-1}, \mathbb{P}^n)$
+% given by linear subspaces of dimension $c-1$ meeting $X$.
+
+% \begin{definition}[Projection]
+%   Let $C$ be a camera. Then there is a rational map
+%   from $\mathbb{P}^3$ to $\mathbb{P}^2$
+%   defined by $p\mapsto Cp$ for all $p\in \mathbb{P}^3$
+%   except the camera center $c$.
+% \end{definition}
+
+
+% \section*{Homography}
+
+% Line equation is $$ax+by+c=0$$
+% Cross of two points is a line $$p_0\times p_1$$
+% Cross of two lines is
+
+% Projectivity (HZ 2.9)
+% invertible map
+% from points in P2 (hom 3-vectors)
+% to points in P2 again
+% that maps lines to lines
+
+% Thm (HZ 2.10). Mapping h from P2 to P2
+% is a proj. iff exists 3x3 non-singular matrix H
+% such that for all points x in P2 then h(x)=Hx.
+
+% Projectivity is also known as
+% collineation or homography or
+% projective transformation
+% (these are synonyms lol)
+
+% \begin{theorem}[Fundamental theorem of homography]
+%   \label{fth}
+%   \begin{equation}
+%     1-1=0
+%   \end{equation}
+% \end{theorem}
+
+
+\printbibliography
+\end{document}
+

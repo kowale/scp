@@ -1,0 +1,691 @@
+\documentclass[a4paper, 12pt]{article}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{enumitem}
+\usepackage[breaklinks,colorlinks,linkcolor=blue,citecolor=blue,unicode]{hyperref}
+\usepackage[yyyymmdd]{datetime}
+
+\usepackage{biblatex}
+\addbibresource{references.bib}
+
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage[T1]{fontenc}
+\usepackage{fontspec}
+
+\usepackage{newunicodechar}
+\newfontfamily{\freeserif}{DejaVu Sans}
+\newunicodechar{ω}{\ensuremath{\omega}}
+\newunicodechar{ℕ}{\ensuremath{\mathbb{N}}}
+\newunicodechar{ℝ}{\ensuremath{\mathbb{R}}}
+\newunicodechar{⌈}{\ensuremath{\lceil}}
+\newunicodechar{⌉}{\ensuremath{\rceil}}
+\newunicodechar{α}{\ensuremath{\alpha}}
+\newunicodechar{σ}{\ensuremath{\sigma}}
+\newunicodechar{ℙ}{\ensuremath{\mathbb{P}}}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{←}{\ensuremath{\leftarrow}}
+\newunicodechar{≥}{\ensuremath{\ge}}
+\newunicodechar{≤}{\ensuremath{\le}}
+\newunicodechar{∀}{\ensuremath{\forall}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{∧}{\ensuremath{\and}}
+\newunicodechar{ᶜ}{\ensuremath{^c}}
+
+\usepackage{listings}
+\usepackage{tikz}
+
+\raggedbottom
+\setlist{nolistsep}
+\pagenumbering{gobble}
+\setlength\parindent{0pt}
+
+\newtheorem{definition}{Definition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+\newtheorem{prop}{Proposition}
+\newtheorem{example}{Example}
+
+\renewcommand{\familydefault}{\sfdefault}
+% \renewcommand{\dateseparator}{--}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\F}{\mathcal{F}}
+\renewcommand{\P}{\mathbb{P}}
+% \newcommand{\set}[2]{\ensuremath{\{#1 \mid #2\}}}
+% \renewcommand{\l}[1]{\fbox{\textbf{#1}}}
+% \renewcommand{\b}[2]{\textbf{#1} (#2).}
+
+\usepackage{color}
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}   % red
+\definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}   % grey
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}      % green
+\definecolor{attributecolor}{rgb}{0.7, 0.1, 0.1} % red
+
+\usepackage{listings}
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{
+  language=lean,
+  framextopmargin=5pt,
+  frame=tb,
+  framerule=0pt,
+  keepspaces=true,
+  columns=fullflexible,
+  mathescape
+}
+
+\begin{document}
+
+\title{Formalising Mathematics Project 3}
+\author{6020618}
+\date{2025-03-28}
+\maketitle
+
+
+
+
+\section*{Introduction}
+
+For the third project,
+I picked up from the first project
+towards formalising split conformal prediction.
+I followed \cite{tibshirani_stat_2023} as primary reference.
+In summary, not counting exploratory examples and many helper lemmas, I have achieved
+
+\vspace{10pt}
+\begin{itemize}
+  \item Definition of conformal quantile (line 149)
+  \item Definition of sample realisation (line 116)
+  \item Statement and partial proof of the marginal coverage guarantee (line 348)
+  \item Statement of exchangeability (line 408)
+  \item Definition of beta distribution density (line 494)
+\end{itemize}
+\vspace{10pt}
+
+I have also tried, but not finished
+
+\vspace{10pt}
+\begin{itemize}
+  \item Measurability of conformal quantile on sample realisation (line 240)
+  \item Uniform rank implies conformal bound (line 330)
+  \item Exchangeability implies uniform rank (line 421)
+\end{itemize}
+
+
+
+
+
+\section*{Probability space}
+
+To work with statistics at sufficient generality and rigour,
+it is convenient to work in measure theory, which I summarise in this section.
+It is also the API for probability in Mathlib.
+
+\begin{definition}[Measurable space]
+Let $\Omega$ be some set and $\F$ be a collection of subsets of $\Omega$
+closed under complements, countable unions, and countable intersections
+such that $\emptyset\in\F$ and $\Omega\in\F$.
+Then $\F$ is called a $\sigma$-algebra on $\Omega$
+and an element of $\F$ is called a measurable set.
+$\F$ is called a $\sigma$-algebra on $\Omega$.
+Any tuple $(\Omega,\,\F)$ is called a measurable space.
+\end{definition}
+
+\begin{definition}[Probability space]
+Let $(\Omega,\,\F)$ be some measurable space.
+Define probability measure as any $\P \colon \F \rightarrow [0,1]$
+such that $\P(\emptyset)=0$ and $\P(\Omega)=1$.
+Any tuple $(\Omega,\,\F,\,\P)$ is called a probability space.
+\end{definition}
+
+In applications, $\Omega$ is the ambient set of possible outcomes of some experiment.
+Nothing is assumed about this space and it's rarely explicitly constructed in practice.
+% For example, $\omega\in\Omega$ may be true height of every human .
+To define a probability space in Lean,
+I define MeasureSpace structure on $\Omega$,
+and designate $\P$ as the probability measure.
+
+\begin{lstlisting}
+open MeasureTheory ProbabilityTheory NNReal Real Finset
+open scoped ENNReal
+
+variable
+  { Ω : Type* }
+  [MeasureSpace Ω]
+  [IsProbabilityMeasure ( ℙ : Measure Ω )]
+\end{lstlisting}
+
+There is a few sharp edges in this API:
+if $\P$ is not defined this way,
+it will be notation for volume,
+which picks underlying space depending on context.
+Also, some examples omit Type* when defining $\Omega$,
+which may lead to unexpected typeclass inference problems.
+These issues were noted by Dr Bhavik Mehta.
+
+\begin{lstlisting}
+-- if ℙ is not defined, it's notation for volume
+example : Measure Ω := volume (α := Ω)
+noncomputable example : Measure ℝ := volume (α := ℝ)
+\end{lstlisting}
+
+The unnecessary spaces between curly brackets and $\Omega$ or $\P$
+are due to issue with listings on my setup.
+I did not have time to fix it, so I added a space,
+as here's how it renders $\{\Omega\}$
+
+\begin{lstlisting}
+-- {Ω}
+\end{lstlisting}
+
+Later on, I needed a few lemmas about complements,
+which I moved up here as they only depend on the probability space.
+They were surprisingly complicated to prove, as I couldn't use ``ring"
+or other such tactics, because of extended reals.
+
+\begin{lstlisting}
+-- first attempt, got lost here, calc and integrals are completely unnecessary
+lemma one_sub_compl (A : Set Ω) (hA : MeasurableSet A) : ℙ A = 1 - ℙ Aᶜ := by
+  rw [prob_compl_eq_one_sub]
+  · calc
+      ℙ A = 1 - 1 + ℙ A := by simp
+      1 - 1 + ℙ A = 1 - (1 - ℙ A) := by
+        refine (ENNReal.toReal_eq_toReal_iff' ?_ ?_).mp ?_
+        · simp
+        · simp
+        · simp only [tsub_self, zero_add]
+          rw [← integral_indicator_one hA]
+          rw [ENNReal.sub_sub_cancel]
+          · exact integral_indicator_one hA
+          · simp
+          · exact prob_le_one
+  · exact hA
+
+-- second attempt, distilled from `one_sub_compl`
+lemma one_sub_compl' (A : Set Ω) (hA : MeasurableSet A) : ℙ A = 1 - ℙ Aᶜ := by
+  rw [prob_compl_eq_one_sub]
+  · refine Eq.symm (ENNReal.sub_sub_cancel ?_ ?_)
+    · simp
+    · exact prob_le_one
+  · exact hA
+
+lemma one_sub_prob_eq_compl (A : Set Ω) (hA : MeasurableSet A) : 1 - ℙ A = ℙ Aᶜ := by
+  rw [prob_compl_eq_one_sub]
+  · exact hA
+\end{lstlisting}
+
+
+
+
+
+
+
+\section*{Random variables}
+
+\begin{definition}[Measurable function]
+Let $(\Omega,\,\F)$ and $(E,\,\mathcal{G})$ be measurable spaces.
+A function $f \colon \Omega \rightarrow E$ is said to be measurable
+if pre-image of every measurable set is itself measurable.
+\end{definition}
+
+Random variables are measurable functions from $\Omega$ to $\R$.
+Note that this definition does not depend on measure $\P$.
+No structure is assumed on $\Omega$, we want to work in the codomain.
+This is done with the pushforward measure,
+also known as probability distribution or law of a random variable.
+For example, a Gaussian random variable can be uniquely defined by it's law,
+which is simply a nice, smooth function over the reals
+
+\begin{definition}[Pushforward measure]
+Let $(\Omega, \mathcal{F}, P)$ be a probability space.
+Let $X$ a measurable function from $\Omega$ to $\R$.
+Define pushfoward $P_X \colon \mathcal{B} \rightarrow [0,1]$
+where $\mathcal{B}$ is Borel $\sigma$-algebra on $\R$ (generated by open sets)
+by $$\P_X(B)=\P(\omega\,\colon X(\omega)\in B)$$
+\end{definition}
+
+Now, we can define a family of independent and identically distributed random variables
+$X_i \colon \Omega \to \mathbb{R}$ for all $i\in\mathbb{N}$, which can be done in Lean as follows.
+
+\begin{lstlisting}
+variable
+  {X : ℕ → Ω → ℝ}
+  (hX : ∀ i, Measurable (X i))
+
+  -- identically distributed
+  (hXident : ∀ i, IdentDistrib (X i) (X 0))
+
+  -- independent
+  (hXindep : iIndepFun inferInstance X)
+\end{lstlisting}
+
+Random variables model the actual observations of outcomes of an experiment.
+For example, we may be interested in true height of all people,
+but we can only really measure approximate height of a smaller sample.
+
+\begin{lstlisting}
+#check ℙ (X 0 ⁻¹' Set.Iic (10 : ℝ))
+#check ℙ {ω : Ω | X 0 ω > 0}
+\end{lstlisting}
+
+
+\section*{Sample realisation}
+
+Once observed (or realised, or sampled i.e. evaluated on some $\omega\in\Omega$),
+we have a real number to work with.
+At first, I defined this as part of the quantile,
+but found it was cleaner to separate finite sets from probability,
+so I defined ``sample" as an interface at this boundary.
+$$\omega \to [\,X_1(\omega), X_2(\omega), ..., X_n(\omega)\,]$$
+
+% To formalise sampling many times,
+% assume that a set of random variables
+% is independent and identically distributed.
+
+\begin{lstlisting}
+/-- Sample of first `n` random variables at some `ω ∈ Ω` -/
+def sample (X : ℕ → Ω → ℝ) (n : ℕ) (ω : Ω) : List ℝ :=
+  (List.range n).map (fun i => X i ω)
+
+lemma sample_nonempty (n : ℕ) (hn : n > 0) (ω : Ω) : (sample X n ω).length > 0 := by
+    simp only [sample, List.length_map, List.length_range, gt_iff_lt]
+    exact hn
+
+lemma sample_nonempty_one (n : ℕ) (hn : n > 0) (ω : Ω) : (sample X (n + 1) ω).length > 0 := by
+    apply sample_nonempty
+    exact Nat.add_pos_left hn 1
+\end{lstlisting}
+
+I started from ``Finset $\R$",
+but as Dr Bhavik Mehta pointed out,
+this method would erase duplicates,
+which could be a problem later on.
+Switching to ``List $\R$" also simplified
+other definitions.
+
+\section*{Conformal quantile}
+
+I needed to compute ``$k$-th smallest of", in other words, quantile.
+There wasn't any I could find in Mathlib, so I defined my own.
+At first, this API depended on $\Omega$,
+but I quickly isolated any mentions of probability into ``sample''.
+
+\begin{lstlisting}
+open Finset
+
+/-- Conformal quantile (simplified critical set) -/
+noncomputable
+def quantile (X : List ℝ) (hX : X.length > 0) (α : ℝ) (hα : α < 1 ∧ 0 < α) : ℝ :=
+  let n := X.length;
+  let ranks := X.mergeSort (· ≤ ·);
+  let k := ⌈(n + 1) * (1 - α)⌉.toNat;
+  (ranks.take k).reverse.head (by
+    simp only [ne_eq, List.reverse_eq_nil_iff, List.take_eq_nil_iff, not_or]
+    constructor
+    · simp only [k, Int.toNat_eq_zero, not_le, Int.ceil_pos]
+      apply mul_pos
+      · exact Nat.cast_add_one_pos n
+      · norm_num
+        exact hα.1
+    · simp only [ranks, sort_range, List.range_eq_nil]
+      refine List.ne_nil_of_length_pos ?_
+      simp only [List.length_mergeSort]
+      exact hX
+    )
+\end{lstlisting}
+
+I briefly tried to define quantile in terms of the empirical cumulative distribution function.
+Quantile is not really an inverse of CDF, as CDF is neither surjective nor injective in general,
+but it can be defined as some function $Q_X$ such that $Q_X(F_X(x))=x$ almost surely.
+It's possible I will need it in the future to finish proofs about measurability.
+
+\begin{definition}[CDF]
+Let $X$ be a random variable.
+Define the cumulative distribution function of $X$ as $$F_X(x)=\P(\omega\,\colon X(\omega)\le x)$$
+\end{definition}
+
+\begin{lstlisting}
+noncomputable example : ℝ := cdf ℙ 0.5
+
+variable (Y : Ω → ℝ) (hY : Measurable Y)
+def cdf' (x : ℝ) : ℝ := ( ℙ { ω : Ω | Y ω ≤ x } ).toReal
+example := cdf' Y 42
+
+def cdf'' (n : ℕ) (x : ℝ) : ℝ := ( ℙ { ω : Ω | X n ω ≤ x } ).toReal
+\end{lstlisting}
+
+\section*{Measurability}
+
+Proving measurability was a struggle, I spent a long time here.
+Whenever I made some progress, I found it did not work few steps later.
+I also hoped the ``measurability" tactic would help more here,
+as many of those ``endgames" seemed about as easy as what I saw Lean can solve by search.
+This is also the first time in my Lean code that I had to increase memory quota (``maxHeartbeats"),
+as search tactics could not find anything without it.
+
+\begin{lstlisting}
+set_option maxHeartbeats 9999 in -- increase memory quota or else `apply?` does not finish
+include hX in
+@[measurability] -- to use in `measurability` in other lemmas
+lemma sample_measurable
+  [MeasurableSpace (List ℝ)] -- NB: fixes some sigma algebra on lists of reals
+  (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  Measurable fun (ω : Ω) => sample X n ω := by
+  simp only [sample]
+  apply Measurable.eval
+  apply Measurable.comp
+  · exact Measurable.of_comap_le fun s a ↦ a
+  · -- the goal here seems easy: Measurable fun x i => X i x
+    #check measurable_pi_iff
+    #check measurable_pi_apply
+    -- these don't unify as is, but promising, thanks metahumor on discord
+    -- NB: it would be very nice to make search tactics prioritise `#check`s nearby
+    -- as a way to nudge the search towards something useful
+    sorry
+
+include hX in
+@[measurability]
+lemma quantile_measurable
+  [MeasurableSpace (Set ℝ)] -- NB: fixes some sigma algebra on reals
+  (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  Measurable fun ω => quantile (sample X n ω) (by exact sample_nonempty n hn ω) α hα := by
+    unfold quantile
+    simp only [List.head_reverse, List.head]
+    intro t ht
+    rw [← MeasurableSpace.map_def]
+    sorry
+
+set_option maxHeartbeats 9999 in
+@[measurability]
+lemma sample_quantile_measurable (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  Measurable fun ω : Ω => quantile (sample X n ω) (by exact sample_nonempty n hn ω) α hα := by
+    #check measurable_const
+    apply measurable_generateFrom
+    simp only [Set.mem_setOf_eq]
+    intro t ht
+    rw [← measurable_mem]
+    simp only [Set.mem_preimage]
+    sorry -- need to combine `quantile_measurable` and `sample_measurable`
+
+@[measurability]
+lemma sample_quantile_one_measurable (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  Measurable fun ω : Ω => quantile (sample X (n+1) ω)
+    (by exact sample_nonempty_one n hn ω) α hα := by
+    refine sample_quantile_measurable α hα (n + 1) ?_
+    simp
+\end{lstlisting}
+
+If I could assume things about $\Omega$,
+maybe I could prove some of it by monotonicity.
+
+\begin{lstlisting}
+variable
+  {Ω' : Type*} [MeasurableSpace Ω'] [TopologicalSpace Ω']
+  [BorelSpace Ω'] [LinearOrder Ω'] [OrderClosedTopology Ω']
+
+#check Monotone.measurable
+\end{lstlisting}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section*{Marginal coverage guarantee}
+
+This was the main objective of my final project,
+also known as ``first key idea of split conformal prediction" in the main reference.
+
+\begin{lstlisting}
+lemma prob_x_gt_x_zero (n : ℕ) : ℙ {ω : Ω | X (n + 1) ω > X (n + 1) ω} = 0 := by simp
+
+lemma sample_ext (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  1 - ℙ {ω | X (n + 1) ω > quantile (sample X n ω) (by exact sample_nonempty n hn ω) α hα} =
+  1 - ℙ {ω | X (n + 1) ω > quantile (sample X (n+1) ω)
+    (by exact sample_nonempty_one n hn ω) α hα} := by
+  sorry -- this should be just `prob_x_gt_x_zero`, but I don't know how to split it out
+
+-- first attempt
+include hX in
+lemma complement_trick (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  1 - ℙ {ω | X (n + 1) ω > quantile (sample X (n + 1) ω)
+        (by exact sample_nonempty_one n hn ω) α hα} =
+      ℙ {ω | X (n + 1) ω ≤ quantile (sample X (n + 1) ω)
+        (by exact sample_nonempty_one n hn ω) α hα} := by
+    rw [one_sub_compl]
+    · sorry -- dead end
+    · apply MeasurableSet.of_compl
+      rw [Set.compl_setOf]
+      simp only [not_lt]
+      apply measurableSet_le
+      · simp only [hX]
+      · refine sample_quantile_measurable α hα (n + 1) (by simp)
+
+-- second attempt
+include hX in
+lemma complement_trick' (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  1 - ℙ {ω : Ω | X (n + 1) ω > quantile (sample X (n + 1) ω)
+    (by exact sample_nonempty_one n hn ω) α hα} =
+  ℙ {ω : Ω | X (n + 1) ω ≤ quantile (sample X (n + 1) ω)
+      (by exact sample_nonempty_one n hn ω) α hα} := by
+    rw [one_sub_prob_eq_compl]
+    · rw [Set.compl_setOf]
+      simp
+    · simp only [measurableSet_setOf]
+      -- should be exact sample_quantile_one_measurable
+      -- typeclasses stuck on ℙ, added all Ω I could think of, ran out of time
+      sorry
+\end{lstlisting}
+
+In the first project, I proved a very simple lemma about ceiling of some numbers.
+I rework it here into a more useful format to compute conformal bound.
+Unfortunately, I did not finish proving the bound itself.
+
+\begin{lstlisting}
+lemma ceil_one_α_mul_n_one_le_n_one (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) :
+  ⌈(1-α)*(n+1)⌉ ≤ n+1 := by
+    obtain ⟨α_lt_1, α_gt_0⟩ := hα
+    rw [Int.ceil_le]
+    apply mul_le_of_le_one_of_le_of_nonneg
+    · exact le_of_lt (by exact sub_lt_self 1 α_gt_0)
+    · simp
+    · norm_cast
+      simp
+
+lemma conformal_bound (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  ℙ {ω | X (n + 1) ω ≤ quantile (sample X (n + 1) ω) (by exact sample_nonempty_one n hn ω) α hα}
+  ≥ ENNReal.ofReal (1 - α) := by
+    sorry
+\end{lstlisting}
+
+Finally, I prove the marginal coverage guarantee,
+assuming helper lemmas introduced so far.
+
+\begin{theorem}[Marginal coverage guarantee]
+  Let $\alpha\in (0,1)$ and $n>0$.
+  Let $X_i\,\colon \Omega \to \R$ for all $i\le n+1$
+  be a family of IID random variables.
+  Let $k=\lceil (1-\alpha)(n+1) \rceil$
+  and $\hat{q}_n \in \R$ be the
+  $k$-th smallest of $X_1,\ldots,X_n$.
+  Then
+  $$\P\big( X_{n+1} \le \hat{q}_n \big) \ge 1-\alpha$$
+\begin{proof}
+  Taking complement,
+  $\P\big(X_{n+1} \le\hat{q}_{n}\big)=1-\P\big(X_{n+1} >\hat{q}_{n}\big)$.
+  Since $X_{n+1}<X_{n+1}$ is impossible,
+  $1-\P\big(X_{n+1} >\hat{q}_{n}\big) = 1-\P\big(X_{n+1} >\hat{q}_{n+1}\big)$.
+  Taking complement again,
+  $1-\P\big(X_{n+1} >\hat{q}_{n+1}\big) = \P\big(X_{n+1} \le\hat{q}_{n+1}\big))$.
+  Lastly, $\P\big( X_{n+1}\le\hat{q}_{n+1} \big)\ge 1-\alpha$ by definition of $k$
+  and uniform rank of $X_{n+1}$ over $\{X_1,\ldots,X_{n+1}\}$ due to IID.
+\end{proof}
+\end{theorem}
+
+The original draft was very long and repetitive,
+so I am quite happy it now clearly mirrors the upstream proof.
+Unfortunately, while there are no ``sorries" inline below,
+not all of those extracted lemmas are finished.
+
+\begin{lstlisting}
+include hX in
+theorem scp_fki (α : ℝ) (hα : α < 1 ∧ 0 < α) (n : ℕ) (hn : n > 0) :
+  ℙ {ω : Ω | X (n + 1) ω ≤ quantile (sample X n ω) (sample_nonempty n hn ω) α hα}
+  ≥ ENNReal.ofReal (1 - α) := by
+    calc
+      -- take complement to have a strict inequality
+      _ = 1 - ℙ {ω | X (n + 1) ω > quantile (sample X n ω)
+        (sample_nonempty n hn ω) α hα} := by
+        simp only [not_le, gt_iff_lt]
+        rw [one_sub_compl]
+        rw [Set.compl_setOf]
+        simp only [not_le]
+        · apply measurableSet_le
+          · simp only [hX]
+          · exact sample_quantile_measurable α hα n hn
+
+      -- extend to a statement about X (n+1)
+      _ = 1 - ℙ {ω | X (n + 1) ω > quantile (sample X (n + 1) ω)
+        (sample_nonempty_one n hn ω) α hα} := by
+        exact sample_ext α hα n hn
+
+      -- take complement again back to original form
+      _ = ℙ {ω | X (n + 1) ω ≤ quantile (sample X (n + 1) ω)
+        (sample_nonempty_one n hn ω) α hα} := by
+        exact complement_trick' hX α hα n hn
+
+      -- compute the bound by uniform rank of the sample
+      _ ≥ ENNReal.ofReal (1 - α) := by exact conformal_bound α hα n hn
+
+    done
+\end{lstlisting}
+
+
+\section*{Exchangeability}
+
+Last step of the marginal coverage proof
+involves computing a probability
+from uniform distribution on observed sample,
+which I planned to derive from IID.
+
+It can also be derived from exchangeability (symmetry of joint density),
+which I preferred, as it's a weaker condition.
+It took me a few tries to get a sensible definition,
+but I did not get very far using it.
+
+\begin{lstlisting}
+variable
+  (sample' : List ℝ)
+  (pdf' : List ℝ → ℝ)
+  -- first attempt, permutations on the set of all possible lists, thanks BM
+  (exch' : ∀ σ : Equiv.Perm (List ℝ), pdf' sample' = pdf' (σ sample'))
+  -- second attempt at permutations, fixed one List, but same issue as before
+  (exch'' : ∀ X : List ℝ, ∀ σ : Equiv.Perm (List ℝ), pdf' (σ X) = pdf' X)
+
+/-- Exchangeability structure -/
+class Exch where
+  /-- Observed sample -/
+  sample : List ℝ
+
+  /-- Joint density -/
+  pdf : List ℝ → ℝ
+
+  /-- Symmetry of density -/
+  -- third attempt, fixing both lists and using List.Perm
+  symm : ∀ X : List ℝ, ∀ Y : List ℝ, X.Perm Y → pdf X = pdf Y
+
+/-- Independence implies exchangeability -/
+-- TODO: need to tie it to X via `sample`
+def Exch.ofIndep (sample : List ℝ) : Exch where
+  sample := sample
+  pdf := sorry
+  symm := sorry
+
+#check pdf.indepFun_iff_pdf_prod_eq_pdf_mul_pdf -- this should be useful
+\end{lstlisting}
+
+
+
+\section*{Beta distribution}
+
+If there are no ties in the sample,
+or sufficiently random tie-breaking method is applied,
+conditional distribution is beta.
+Taking a break from measurability,
+I started to write beta density,
+as it was missing in Mathlib.
+
+\begin{lstlisting}
+open Real
+
+example : Gamma 4 = 6 := by
+  simp only [Gamma_ofNat_eq_factorial]
+  unfold Nat.factorial
+  simp
+
+/-- Beta function -/
+noncomputable
+def Beta (α : ℝ) (β : ℝ) : ℝ := Gamma α * Gamma β
+
+example : Beta 0 0 = 0 := by
+  unfold Beta
+  simp
+
+/-- Beta density -/
+noncomputable
+def betaPDFReal (α : ℝ) (β : ℝ) (x : ℝ) : ℝ :=
+  (x^(α-1) * (1-x)^(β-1)) / Beta α β -- https://en.wikipedia.org/wiki/Beta_distribution
+\end{lstlisting}
+
+
+% \section*{Uniform rank}
+
+% To compute the conformal bound on probability.
+
+% \begin{lstlisting}
+% -- unif
+% \end{lstlisting}
+
+% What I am looking for is that regardless of distribution
+% and dependence structure,
+% if order in which values arrive does not matter,
+% each permutation of a particular sample is equally probable.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+% \section*{Future work and reflections}
+
+% (which are probably very useful for some people).
+% In the end, I uncovered quite a few examples of prior work on statistics,
+% some quite recent, which helped a lot.
+
+% Finally, I was very surprised by how much strategy was involved
+% in doing this course and Lean in general.
+% It felt like actual work - high uncertainty of what will work,
+% not many points for failed attempts, ...
+% Asking a question might result in a suggestion that changes the approach a lot,
+% but makes the whole thing much more interesting.
+
+\printbibliography
+\end{document}
+

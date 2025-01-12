@@ -1,0 +1,4 @@
+*.tex linguist-documentation=true
+*.tex linguist-detectable=false
+*.tex linguist-vendored=true
+*.tex linguist-generated=true

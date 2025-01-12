@@ -1,0 +1,461 @@
+\documentclass[a4paper, 12pt]{article}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{enumitem}
+\usepackage[breaklinks,colorlinks,linkcolor=blue,citecolor=blue,unicode]{hyperref}
+\usepackage[yyyymmdd]{datetime}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage{biblatex}
+\addbibresource{references.bib}
+
+\usepackage[T1]{fontenc}
+\usepackage{fontspec}
+\setmainfont{texgyrepagella}[
+  Extension = .otf,
+  UprightFont = *-regular,
+  BoldFont = *-bold,
+  ItalicFont = *-italic,
+  BoldItalicFont = *-bolditalic,
+]
+
+\usepackage{newunicodechar}
+\newunicodechar{ℕ}{\mathbb{N}}
+\newunicodechar{ℝ}{\mathbb{R}}
+\newunicodechar{→}{\right}
+\newunicodechar{←}{\left}
+\newunicodechar{∀}{\forall}
+\newunicodechar{≥}{\ge}
+\newunicodechar{≤}{\le}
+\newunicodechar{⟩}{\rangle}
+\newunicodechar{∑}{\sum}
+\newunicodechar{≠}{\ne}
+\newunicodechar{⌈}{\lceil}
+\newunicodechar{⌉}{\rceil}
+\newunicodechar{α}{\alpha}
+\newunicodechar{Ω}{\Omega}
+\newunicodechar{σ}{\displaystyle\sum}
+\newunicodechar{λ}{\lambda}
+\newunicodechar{↦}{\mapsto}
+\newunicodechar{∈}{\in}
+\newunicodechar{ᵢ}{_i}
+
+
+\usepackage{listings}
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage{tikz}
+
+\raggedbottom
+\setlist{nolistsep}
+\pagenumbering{gobble}
+\setlength\parindent{0pt}
+
+\newtheorem{definition}{Definition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+\newtheorem{prop}{Proposition}
+\newtheorem{example}{Example}
+
+\renewcommand{\familydefault}{\sfdefault}
+\renewcommand{\dateseparator}{--}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\set}[2]{\ensuremath{\{#1 \mid #2\}}}
+\renewcommand{\l}[1]{\fbox{\textbf{#1}}}
+\renewcommand{\b}[2]{\textbf{#1} (#2).}
+
+
+
+\lstset{
+  % frame=single,
+  % framexleftmargin=5mm,
+  % backgroundcolor=\color{gray},
+  % framexleftmargin=16pt,
+  % framextopmargin=6pt,
+  % framexbottommargin=6pt,
+  framextopmargin=5pt,
+  frame=tb,
+  framerule=0pt,
+}
+
+
+\usepackage{color}
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}   % red
+\definecolor{tacticcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}   % grey
+\definecolor{symbolcolor}{rgb}{0.0, 0.1, 0.6}    % blue
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}      % green
+\definecolor{attributecolor}{rgb}{0.7, 0.1, 0.1} % red
+
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{language=lean}
+
+\def\P{\mathbb{P}}
+\def\ind{\bold{1}}
+
+\begin{document}
+
+\title{
+  Formalising Mathematics Project 1
+}
+\author{6020618}
+\date{\today}
+\maketitle
+
+\section*{Introduction}
+
+For my first project, I wanted to prove
+some theoretical guarantees of split conformal prediction (SCP)
+\cite{vovk_conditional_2012,angelopoulos_conformal_2023},
+a statistical technique for turning point predictors (e.g. neural networks)
+into set predictors, based on hold-out calibration dataset.
+Informal proofs can be followed with first-year statistics knowledge
+about random variables, it's an active area of applied research
+\cite{yang_object_2023,zhang_champ_2024,timans_adaptive_2024,parente_conformalized_2023,feldman_learning_2025,quach_conformal_2024},
+and there is some controversy about its interpretation and assumptions
+\cite{recht_cover_2024,hullman_conformal_2024}.
+I thought it would be an interesting topic to formalise
+and gain some insight into how to do statistics in Lean.
+
+\begin{theorem}[Split conformal prediction]
+  \label{scp}
+  Let $Z_i=(X_i, Y_i)\sim \mathcal{X}\times\mathcal{Y}$
+  be an exchangeable sequence of random variables
+  and $\hat{Y}\colon \mathcal{X} \to \mathcal{Y}$
+  be any point predictor fitted on a training subset.
+  Let residuals $R_i=|Y_i-\hat{Y}(X_i)|\in\mathbb{R}$ for some norm
+  computed on a calibration subset (disjoint from training),
+  and $C$ be $\hat{Y}(X_{n+1})$ plus-minus $\lceil (1-\alpha)(n+1) \rceil$-th
+  smallest of $R_1,\ldots,R_n$. Then
+  \begin{equation}
+    \label{mc_split}
+    \P\big( Y_{n+1} \in C \big) \ge 1-\alpha
+  \end{equation}
+\end{theorem}
+
+Formalising just the statement requires
+spelling out the measure-theoretic detail:
+random variables, probability of set membership,
+product measures (for joint observations and subsets),
+symmetry of joint distribution (exchangeability),
+and order statistics (rank of realisations).
+To get started, I looked to reduce scope
+to a simpler statistical setting to build on.
+
+\begin{lstlisting}
+-- hard to state without measure theory
+theorem scp (α : ℝ) (n : ℕ) (C : X → ℝ) (X Y : ℕ → ℝ) (P : Prop → ℝ)
+  : P (Y n + 1 ≤ C X n) ≥ 1 - α := sorry
+\end{lstlisting}
+
+% we need a few things for this
+% 1) joint distribution on (X, Y) i.e. product measure
+% 2) definition of q in terms of alpha and n
+% 3) P(Y n+1 > q) as complement
+% 4) "realisation of Y n+1 uniform rank"
+
+% \begin{example}
+% Conformal prediction allows practitioners to "conformalise"
+% pre-trained models on this calibration set.
+% Large prediction sets suggest bad point predictions,
+% or challenging data points.
+% \end{example}
+
+\section*{Simpler statistical setting}
+
+I came across this formulation in notes for a course by R. Tibshirani
+\cite{tibshirani_stat_2023}.
+
+% \begin{definition}[Marginal coverage]
+% \label{mc_simpler}
+% \begin{equation}
+%   \P\big( Y_{n+1} \le \hat{q}_n \big) \geq 1-\alpha
+% \end{equation}
+% \end{definition}
+
+\begin{lemma}
+  \label{cp_simpler}
+  Let $\{Y_1,\ldots,Y_{n+1}\}$
+  i.i.d. real-valued random variables
+  and $\alpha\in (0, 1)$
+  such that $\alpha\ge \frac{1}{n+1}$.
+  Let $k=\lceil (1-\alpha)(n+1) \rceil$.
+  and $\hat{q}_n \in \R$ be the
+  $k$-th smallest of $Y_1,\ldots,Y_n$.
+  Then $\hat{q}_n$ satisfies
+  $$\P\big( Y_{n+1} \le \hat{q}_n \big) \ge 1-\alpha$$
+\begin{proof}
+  Since $Y_{n+1}<Y_{n+1}$ is false,
+  we have that $\P\big( Y_{n+1}>\hat{q}_{n+1} \big) = \P\big( Y_{n+1}>\hat{q}_{n} \big)$.
+  Taking complements,
+  it's equivalent to $\P\big( Y_{n+1}\le\hat{q}_{n+1} \big) = \P\big( Y_{n+1}\le\hat{q}_{n} \big)$.
+  Lastly, $\P\big( Y_{n+1}\le\hat{q}_{n+1} \big)\ge 1-\alpha$ by definition of $k$
+  and uniform rank over $\{Y_1,\ldots,Y_{n+1}\}$ due to i.i.d. assumption.
+\end{proof}
+\end{lemma}
+
+\subsection*{Intermediate result for quantile inequality}
+
+First, I needed to define a $k$-th smallest element (quantile)
+and argue about where it "lands" assuming "uniform rank" of $Y_{n+1}$.
+I started by proving that
+
+\begin{lemma}
+If $\alpha\in (0, 1)$ then
+$\lceil(1-\alpha)(n+1)\rceil \le n+1$
+\end{lemma}
+  % such that $\alpha\ge \frac{1}{n+1}$.
+
+\begin{lstlisting}
+lemma α_mul_n_lt_n (α_le_1 : α < 1)
+  : Nat.ceil (α * n) ≤ n := by
+  rw [Nat.ceil_le]
+  apply mul_le_of_le_one_of_le_of_nonneg -- thanks Bhavik Mehta
+  · exact le_of_lt α_le_1 -- via `exact?`
+  -- `exact?` fails at first because it expands to `↑n`
+  -- but this can be fixed with a gap, thanks Bhavik Mehta
+  · exact Preorder.le_refl _
+  -- `aesop?` instead finds simp_all
+  -- simp_all only [gt_iff_lt, le_refl]
+  · exact Nat.cast_nonneg' n -- via `exact?`
+\end{lstlisting}
+
+Search tactics helped a lot more than I expected,
+but applying some LSP suggestions was broken
+and required a small edit, suggested by Dr Bhavik Mehta.
+More was needed for "uniform rank",
+but I decided to finish non-statistical parts
+of the proof first.
+
+\subsection*{Intermediate result on indicator functions}
+
+Next, I tried to reduce the argument about
+irrelevance of $Y_{n+1}$ in complement in \ref{cp_simpler}
+into a simpler lemma about indicator functions
+without using any probability theory.
+I also switched indexing to start at $0$
+to use lemmas in Finset,
+thanks to a suggestion from Professor Kevin Buzzard.
+I also had to open classical logic,
+following advice from the problem sheets.
+Unfortunately, $\sum$ symbol did not render correctly in listings,
+even though both the font and Unicode processing worked for other symbols.
+I did not have time to fix this properly,
+so I replaced it with "Sum" in this document
+(the Lean file uses correct notation).
+
+\begin{lemma}[Sum of $s_n<s_k$ does not depend on $s_n$]
+\label{cp_simplest}
+Let $s_0,\ldots,s_n$ be a set of distinct reals. Then
+$$\sum_{k=0}^n \ind\{s_k > s_n\}=\sum_{k=0}^{n-1} \ind\{s_k > s_n\}$$
+\begin{proof}
+  Expand the sums to see that $\ind\{s_n > s_n\}=0$
+\end{proof}
+\end{lemma}
+
+I started formalising \ref{cp_simplest} by induction,
+following examples from problem sheets on finite sets.
+I was also looking for lemmas on indicator functions in mathlib,
+worrying about having to deal with non-computability of reals in Lean.
+Thanks to suggestion from Professor Kevin Buzzard, I defined a function regardless,
+and was positively surprised that the simplifier can use that definition
+even when I mark the whole section as non-computable.
+
+\begin{lstlisting}
+open Finset Classical Nat
+
+noncomputable section
+
+variable
+  (n : ℕ)
+  (s : ℕ → ℝ)
+
+/-- indicator I{Sₙ > Sₖ} -/
+def ind (s : ℕ → ℝ) (n : ℕ) (k : ℕ) : ℝ :=
+  if s n > s k then 1 else 0
+
+example
+  -- assume partial order without loss of generality
+  (h_non_inc : ∀ x, s x ≥ s (x + 1))
+  : Sum k in range (n-1), ind s n k = Sum k in range n, ind s n k := by
+  -- induction example from Section 8 Sheet 1
+  induction' n with d hd
+  · rfl
+  · rw [sum_range_succ]
+    -- simp can "expand" defs, from Section 2 Sheet 5
+    simp [ind]
+    apply h_non_inc
+    -- didn't need hd, so induction is not a good fit
+\end{lstlisting}
+
+I was struggling to use the inductive hypothesis,
+but found that upon last element of the sum
+and simplifying using function definition,
+the goal can reduce to a partial order on the sequence.
+I wasn't sure how to argue for no loss of generality,
+so I ended up adding it as an assumption.
+Following advice from Dr Bhavik Mehta to look for Iic lemmas
+I found a much simpler proof that captures the informal argument better.
+As these sums can be written over inequalities,
+I could also remove "range" from the statement.
+I couldn't use the simplifier directly for some reason,
+but it worked when I extracted it into a lemma.
+
+\begin{lstlisting}
+lemma ind_at_nn_is_0 : ∀ n, ind s n n = 0 := by
+  simp [ind]
+
+example : Sum k < n, ind s n k = Sum k ≤ n, ind s n k := by
+  rw [← sum_Iio_add_eq_sum_Iic]
+  rw [self_eq_add_right]
+  rw [ind_at_nn_is_0]
+\end{lstlisting}
+
+Lastly, I tried to add more readable notation for "s n k",
+which was to do for a binary operator,
+but I didn't find an easy way to express brackets this way
+(concatenating more terms did not work).
+
+\begin{lstlisting}
+/-- notation for indicator I{Sₙ > Sₖ} -/
+notation l " ⟩ " r => (if l > r then 1 else 0)
+
+lemma lt_sum_eq_le_sum : Sum k < n, (s n ⟩ s k) = Sum k ≤ n, (s n ⟩ s k) := by
+  rw [← sum_Iio_add_eq_sum_Iic]
+  rw [self_eq_add_right]
+  simp
+\end{lstlisting}
+
+\section*{Measure-theoretic probability}
+
+To start putting results together into \ref{cp_simpler},
+I followed \cite{degenne_mathlib_prob_2024} to
+start defining the statement in terms of measure theory.
+
+\subsection*{Random variables}
+
+Let $(\Omega, \mathcal{F}, P)$ a probability space.
+Let $X$ a $(\Omega, \mathcal{F})$-measurable function from $\Omega$ to $\R$
+and let $P_X$ be a $(\R, \mathcal{B})$-measurable function from $\mathcal{B}$ to $[0,1]$
+defined by $P_X(B)=P(\omega\colon X(\omega)\in B)$. This is written as $X \sim P_X$.
+Unfortunately, like with $\sum$,
+$\Omega$ has not rendered correctly in listings,
+so I had to replace it with "Omega" in this document.
+
+\begin{lstlisting}
+open MeasureTheory ProbabilityTheory NNReal
+
+variable
+  {Omega : Type}
+  [MeasureSpace Omega]
+  {P : Measure Omega}
+  [IsProbabilityMeasure P]
+
+  -- family {Xᵢ : i ∈ ℝ} of i.i.d. real-valued random variables
+  {X : ℝ → Omega → ℝ}
+  (h_meas : Measurable (X i))
+  (h_ident : IdentDistrib (X i) (X j))
+  (h_indep : ∀ i ≠ j, IndepFun (X i) (X j))
+\end{lstlisting}
+
+\subsection*{Exchangeablility}
+
+Also known as "symmetry of the joint distribution".
+
+\begin{definition}[Exchangeability]
+  \label{exch}
+  Let $f$ be joint pdf of $X_1, \ldots, X_n$ random variables.
+  Then $f$ is exchangeable if for all permutations $\sigma$
+  $$f(X_1, \ldots, X_n)=f(X_{\sigma(1)}, \ldots, X_{\sigma(n)})$$
+\end{definition}
+
+To state \ref{exch},
+permutation group can be defined on the set of indices.
+
+\begin{lstlisting}
+variable
+  -- default bind rule would say { fᵢ : ℝ → ℝ | i ≤ n }
+  -- using parentheses to instead say f : ℝ^n → ℝ (thanks Bhavik Mehta)
+  {n : ℕ} {α : ℝ}
+  {f : (Fin n → ℝ) → ℝ}
+
+  -- finite permutation on Rn, thanks Bhavik Mehta
+  {σ : Equiv.Perm (Fin n)}
+  ( f_symm : ∀ x, f (λ y ↦ x (σ y)) = f x )
+\end{lstlisting}
+
+\section*{Conclusion}
+
+By this point, I certainly spent 15 hours on this project,
+and unfortunately did not complete formalising SCP.
+The largest obstacles were:
+searching for relevant lemmas,
+debugging confusing type errors,
+splitting informal proofs into small, formal lemmas,
+formatting Lean code in LaTeX,
+and most importantly,
+spelling out all statistical arguments
+in terms of measure theory,
+as that is how Lean understands probability.
+I learned a lot, and I hope to continue this topic in future projects.
+
+% \subsection*{Functions from $\R^n$}
+
+% \begin{lstlisting}
+% variable
+%   -- Default bind rule would say { fᵢ : ℝ → ℝ | i ≤ n }
+%   -- Using parentheses to instead say f : ℝⁿ → ℝ (thanks Bhavik Mehta)
+%   {α : ℝ}
+%   {f : (Fin n → ℝ) → ℝ}
+% \end{lstlisting}
+
+% \subsection*{Gaussian distribution}
+
+% \begin{lstlisting}
+% variable
+%   -- X₀ ∼ N(μ, σ)
+%   {μ : ℝ}
+%   {σ : ℝ≥0}
+%   {h_normal : P.map (X 0) = gaussianReal 0 1}
+
+% #check pdf (X 0) P (P.map (X 10)) 0
+
+% example : cdf (P.map (X 10)) 0 > 0 := by
+%   apply?
+
+% #check uniformOn {1,2,3}
+% #check P[X 0.3211]
+% #check moment (X pi) 10
+% #check ∂P/∂P
+% #check X 0
+
+% /- example : ∀ s, P (X 0 ⁻¹' s) = P.map (X 0) s := by -/
+% /-   rw [h_normal] -/
+% /-   intro s -/
+% /-   rw? -/
+
+% example : P.map (X 0) = gaussianReal 0 1 := by
+%   exact?
+
+% \end{lstlisting}
+
+% By this point, I spent about 10 hours on the project.
+% I decided to revisit measure-theoretic probability,
+% following a very useful blog post by Rémy Degenne.
+% https://leanprover-community.github.io/blog/posts/basic-probability-in-mathlib/
+% https://homepages.math.uic.edu/~rgmartin/Teaching/Stat511/Notes/511notes.pdf page 12
+
+
+% , and only $P_X$ is explicitly given
+% as a CDF or else.
+% \begin{example}
+%   Suppose $\omega \in \Omega$ is any possible scene in front of a camera
+%   and $X \colon \Omega \to \R^{h\times w\times 3}$ is a process
+%   of that camera taking a picture as an RGB pixel image.
+% \end{example}
+
+
+\printbibliography
+
+\end{document}
+
